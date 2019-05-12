@@ -1,5 +1,5 @@
 # MidiModder
-Version 0.1
+Version 0.2
 By FroggestSpirit
 
 Batch Midi Parser for Python 3
@@ -10,4 +10,4 @@ For best results, use Midi version 1 files
 
 Usage: MidiModder.py mode input output
 
-mode: -e  Encode text file to Midi  or    -d  Decode Midi to text file
+mode: -e  Encode text file to Midi  | -d  Decode Midi to text file  | -a  Analyze the Midi and display information  | -h  Show help
