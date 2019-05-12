@@ -1,5 +1,5 @@
 # MidiModder
-Version 0.2
+Version 0.2.1
 By FroggestSpirit
 
 Batch Midi Parser for Python 3
