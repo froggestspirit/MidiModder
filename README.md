@@ -1,7 +1,8 @@
 # MidiModder
-Batch Midi Parser
 Version 0.1
 By FroggestSpirit
+
+Batch Midi Parser
 
 Convert Midi files to text for viewing/editing, then back to Midi
 
@@ -9,6 +10,4 @@ For best results, use Midi version 1 files
 
 Usage: MidiModder.py mode input output
 
-mode: -e  Encode text file to Midi
-
-      -d  Decode Midi to text file
+mode: -e  Encode text file to Midi  or    -d  Decode Midi to text file
