@@ -1,4 +1,4 @@
-#Midi-Modder 0.2 by FroggestSpirit
+#Midi-Modder 0.2.1 by FroggestSpirit
 #Parses Midi files to text for editing then back to midi
 #Make backups, this can overwrite files without confirmation
 import sys
@@ -157,8 +157,14 @@ if(len(sys.argv)<4):
 							trackPos[i]+=2
 						elif((command&0xF0)==0x90):
 							#note on
-							polyphony+=1
-							trackPos[i]+=2
+							arg1=midiFile[trackPos[i]]
+							trackPos[i]+=1
+							arg2=midiFile[trackPos[i]]
+							trackPos[i]+=1
+							if(arg2==0):
+								if(polyphony>0): polyphony-=1#velocity of 0 is the same as note off
+							else:
+								polyphony+=1
 						elif((command&0xF0)==0xA0):
 							#key pressure
 							trackPos[i]+=2
