@@ -1,4 +1,4 @@
-#Midi-Modder 0.1 by FroggestSpirit
+#Midi-Modder 0.2 by FroggestSpirit
 #Parses Midi files to text for editing then back to midi
 #Make backups, this can overwrite files without confirmation
 import sys
@@ -12,7 +12,210 @@ if(len(sys.argv)<2):
 	sys.exit()
 if(len(sys.argv)<4):
 	if(sys.argv[1]=="-h" or sys.argv[1]=="--help"):
-		print("Usage: "+sys.argv[0]+" mode input output\nMode:\t-e\tEncode text file to Midi\n\t-d\tDecode Midi to text file\n\t-h\tShow this help message")
+		print("Usage: "+sys.argv[0]+" mode input output\nMode:\t-e\tEncode text file to Midi\n\t-d\tDecode Midi to text file\n\t-a\tAnalyze the Midi and display information\n\t-h\tShow this help message")
+		sys.exit()
+	elif(sys.argv[1]=="-a" or sys.argv[1]=="--analyze"):
+		infile=open(sys.argv[2], "rb")
+		midiFile=infile.read()
+		infile.close()
+
+		fileSize=len(midiFile)
+		header=str(chr(midiFile[0]))+str(chr(midiFile[1]))+str(chr(midiFile[2]))+str(chr(midiFile[3]))
+		if(header!="MThd"):
+			print("Not a MIDI file.")
+			sys.exit()
+		headerSize=midiFile[7]+(midiFile[6]*0x100)+(midiFile[5]*0x10000)+(midiFile[4]*0x1000000)
+		numTracks=midiFile[11]+(midiFile[10]*256)
+		timeDivision=midiFile[13]+(midiFile[12]*256)
+		if(echo): print("File Size: "+str(fileSize))
+		if(echo): print("Number of Tracks: "+str(numTracks))
+		if(echo): print("Time Division: "+str(timeDivision))
+		trackStart=[]
+		trackPos=[]
+		trackDelay=[]
+		lastTrackCommand=[]
+		trackEnd=True
+		lastCommand=0
+		filePos=16+headerSize #Skip 'MTrk' and tracksize
+		trackNum=0
+		#get the track start locations
+		while(filePos<fileSize):
+			if(trackEnd):
+				trackStart.append(filePos)
+				trackPos.append(filePos)
+				lastTrackCommand.append(0)
+				trackDelay.append(0)#get the first delay value
+				val=midiFile[filePos]
+				filePos+=1
+				if(val>0x7F):
+					trackDelay[trackNum]+=(val&0x7F)
+					trackDelay[trackNum]*=0x80
+					val=midiFile[filePos]
+					filePos+=1
+					if(val>0x7F):
+						trackDelay[trackNum]+=(val&0x7F)
+						trackDelay[trackNum]*=0x80
+						val=midiFile[filePos]
+						filePos+=1
+						if(val>0x7F):
+							trackDelay[trackNum]+=(val&0x7F)
+							trackDelay[trackNum]*=0x80
+							val=midiFile[filePos]
+							filePos+=1
+				trackDelay[trackNum]+=(val&0x7F)
+				filePos=trackStart[trackNum]
+				trackEnd=False
+
+			delay=0
+			val=midiFile[filePos]
+			filePos+=1
+			if(val>0x7F):
+				delay+=(val&0x7F)
+				delay*=0x80
+				val=midiFile[filePos]
+				filePos+=1
+				if(val>0x7F):
+					delay+=(val&0x7F)
+					delay*=0x80
+					val=midiFile[filePos]
+					filePos+=1
+					if(val>0x7F):
+						delay+=(val&0x7F)
+						delay*=0x80
+						val=midiFile[filePos]
+						filePos+=1
+			delay+=(val&0x7F)
+
+			command=midiFile[filePos]
+			filePos+=1
+			textCommand=""
+			if(command<0x80):
+				command=lastCommand
+				filePos-=1
+			lastCommand=command
+			if((command&0xF0)==0x80):
+				#note off
+				filePos+=2
+			elif((command&0xF0)==0x90):
+				#note on
+				filePos+=2
+			elif((command&0xF0)==0xA0):
+				#key pressure
+				filePos+=2
+			elif((command&0xF0)==0xB0):
+				#controller change
+				filePos+=2
+			elif((command&0xF0)==0xC0):
+				#program change
+				filePos+=1
+			elif((command&0xF0)==0xD0):
+				#channel pressure
+				filePos+=1
+			elif((command&0xF0)==0xE0):
+				#pitch bend
+				filePos+=2
+			elif(command==0xF0 or command==0xF7):
+				#sys-ex event
+				arg1=midiFile[filePos]
+				filePos+=arg1+1
+			elif(command==0xFF):
+				#meta event
+				arg1=midiFile[filePos]
+				filePos+=1
+				if(arg1==0x2F):
+					#end of track
+					filePos+=9#skip next 'MTrk' and tracklength
+					lastCommand=0
+					trackEnd=True
+					trackNum+=1
+				else:
+					arg1=midiFile[filePos]
+					filePos+=arg1+1
+					
+		#simulate the midi
+		polyphony=0
+		maxPoly=0
+		instUsed=[]
+		for i in range(128): instUsed.append(False)
+		numTracks=len(trackStart)
+		tracksDone=0
+		while(tracksDone<numTracks):
+			for i in range(numTracks):
+				if(trackPos[i]>0):
+					trackDelay[i]-=1;
+					while(trackDelay[i]<=0):
+						command=midiFile[trackPos[i]]
+						trackPos[i]+=1
+						textCommand=""
+						if(command<0x80):
+							command=lastTrackCommand[i]
+							trackPos[i]-=1
+						lastTrackCommand[i]=command
+						if((command&0xF0)==0x80):
+							#note off
+							if(polyphony>0): polyphony-=1
+							trackPos[i]+=2
+						elif((command&0xF0)==0x90):
+							#note on
+							polyphony+=1
+							trackPos[i]+=2
+						elif((command&0xF0)==0xA0):
+							#key pressure
+							trackPos[i]+=2
+						elif((command&0xF0)==0xB0):
+							#controller change
+							trackPos[i]+=2
+						elif((command&0xF0)==0xC0):
+							#program change
+							arg1=midiFile[trackPos[i]]
+							instUsed[arg1]=True
+							trackPos[i]+=1
+						elif((command&0xF0)==0xD0):
+							#channel pressure
+							trackPos[i]+=1
+						elif((command&0xF0)==0xE0):
+							#pitch bend
+							trackPos[i]+=2
+						elif(command==0xF0 or command==0xF7):
+							#sys-ex event
+							arg1=midiFile[trackPos[i]]
+							trackPos[i]+=arg1+1
+						elif(command==0xFF):
+							#meta event
+							arg1=midiFile[trackPos[i]]
+							trackPos[i]+=1
+							if(arg1==0x2F):
+								#end of track
+								trackPos[i]=0
+								tracksDone+=1
+							else:
+								arg1=midiFile[trackPos[i]]
+								trackPos[i]+=arg1+1
+						
+						trackDelay[i]=0
+						val=midiFile[trackPos[i]]
+						trackPos[i]+=1
+						if(val>0x7F):
+							trackDelay[i]+=(val&0x7F)
+							trackDelay[i]*=0x80
+							val=midiFile[trackPos[i]]
+							trackPos[i]+=1
+							if(val>0x7F):
+								trackDelay[i]+=(val&0x7F)
+								trackDelay[i]*=0x80
+								val=midiFile[trackPos[i]]
+								trackPos[i]+=1
+								if(val>0x7F):
+									trackDelay[i]+=(val&0x7F)
+									trackDelay[i]*=0x80
+									val=midiFile[trackPos[i]]
+									trackPos[i]+=1
+						trackDelay[i]+=(val&0x7F)
+					if(polyphony>maxPoly): maxPoly=polyphony
+		print("Max Polyphony: "+str(maxPoly)+"\n")
+		print("Instruments Used: ")
+		for i in range(128): 
+			if(instUsed[i]): print(str(i)+", ")
 		sys.exit()
 	else:
 		print("Try running "+sys.argv[0]+" -h for usage.")
