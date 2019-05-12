@@ -67,11 +67,13 @@ if(sys.argv[1]=="-d" or sys.argv[1]=="--decode"):
 					filePos+=1
 		delay+=(val&0x7F)
 		if(delay>0): outfile.write("Delay:"+str(delay)+"\n")
-		
+
 		command=midiFile[filePos]
 		filePos+=1
 		textCommand=""
-		if(command<0x80): command=lastCommand
+		if(command<0x80):
+			command=lastCommand
+			filePos-=1
 		lastCommand=command
 		if((command&0xF0)==0x80):
 			#note off
