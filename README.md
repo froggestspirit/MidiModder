@@ -2,7 +2,7 @@
 Version 0.1
 By FroggestSpirit
 
-Batch Midi Parser
+Batch Midi Parser for Python 3
 
 Convert Midi files to text for viewing/editing, then back to Midi
 
