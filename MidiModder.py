@@ -42,7 +42,7 @@ if(sys.argv[1]=="-d" or sys.argv[1]=="--decode"):
 	outfile=open(sys.argv[3],"w")
 	outfile.write("TimeDivision:"+str(timeDivision)+"\n\n")
 	filePos=16+headerSize #Skip 'MTrk' and tracksize
-	trackData=False
+	trackNum=-1
 	while(filePos<fileSize):
 		if(trackEnd):
 			outfile.write("StartTrack\n")
@@ -75,9 +75,9 @@ if(sys.argv[1]=="-d" or sys.argv[1]=="--decode"):
 		lastCommand=command
 		if((command&0xF0)==0x80):
 			#note off
-			if not trackData:
+			if(trackNum!=str(command&0xF)):
 				outfile.write("Track:"+str(command&0xF)+"\n")
-			trackData=True
+			trackNum=str(command&0xF)
 			textCommand="NoteOff:"
 			arg1=midiFile[filePos]
 			filePos+=1
@@ -86,9 +86,9 @@ if(sys.argv[1]=="-d" or sys.argv[1]=="--decode"):
 			outfile.write(textCommand+str(arg1)+","+str(arg2)+"\n")
 		elif((command&0xF0)==0x90):
 			#note on
-			if not trackData:
+			if(trackNum!=str(command&0xF)):
 				outfile.write("Track:"+str(command&0xF)+"\n")
-			trackData=True
+			trackNum=str(command&0xF)
 			textCommand="NoteOn:"
 			arg1=midiFile[filePos]
 			filePos+=1
@@ -97,9 +97,9 @@ if(sys.argv[1]=="-d" or sys.argv[1]=="--decode"):
 			outfile.write(textCommand+str(arg1)+","+str(arg2)+"\n")
 		elif((command&0xF0)==0xA0):
 			#key pressure
-			if not trackData:
+			if(trackNum!=str(command&0xF)):
 				outfile.write("Track:"+str(command&0xF)+"\n")
-			trackData=True
+			trackNum=str(command&0xF)
 			textCommand="PolyPressure:"
 			arg1=midiFile[filePos]
 			filePos+=1
@@ -108,9 +108,9 @@ if(sys.argv[1]=="-d" or sys.argv[1]=="--decode"):
 			outfile.write(textCommand+str(arg1)+","+str(arg2)+"\n")
 		elif((command&0xF0)==0xB0):
 			#controller change
-			if not trackData:
+			if(trackNum!=str(command&0xF)):
 				outfile.write("Track:"+str(command&0xF)+"\n")
-			trackData=True
+			trackNum=str(command&0xF)
 			arg1=midiFile[filePos]
 			filePos+=1
 			arg2=midiFile[filePos]
@@ -118,27 +118,27 @@ if(sys.argv[1]=="-d" or sys.argv[1]=="--decode"):
 			outfile.write("Controller_"+str(arg1)+":"+str(arg2)+"\n")
 		elif((command&0xF0)==0xC0):
 			#program change
-			if not trackData:
+			if(trackNum!=str(command&0xF)):
 				outfile.write("Track:"+str(command&0xF)+"\n")
-			trackData=True
+			trackNum=str(command&0xF)
 			textCommand="Instrument:"
 			arg1=midiFile[filePos]
 			filePos+=1
 			outfile.write(textCommand+str(arg1)+"\n")
 		elif((command&0xF0)==0xD0):
 			#channel pressure
-			if not trackData:
+			if(trackNum!=str(command&0xF)):
 				outfile.write("Track:"+str(command&0xF)+"\n")
-			trackData=True
+			trackNum=str(command&0xF)
 			textCommand="KeyPressure:"
 			arg1=midiFile[filePos]
 			filePos+=1
 			outfile.write(textCommand+str(arg1)+"\n")
 		elif((command&0xF0)==0xE0):
 			#pitch bend
-			if not trackData:
+			if(trackNum!=str(command&0xF)):
 				outfile.write("Track:"+str(command&0xF)+"\n")
-			trackData=True
+			trackNum=str(command&0xF)
 			textCommand="PitchBend:"
 			arg1=midiFile[filePos]
 			filePos+=1
@@ -172,7 +172,7 @@ if(sys.argv[1]=="-d" or sys.argv[1]=="--decode"):
 				filePos+=9#skip next 'MTrk' and tracklength
 				lastCommand=0
 				trackEnd=True
-				trackData=False
+				trackNum=-1
 			else:
 				outfile.write(textCommand+str(arg1)+":")
 				if(textMode): outfile.write('"')
