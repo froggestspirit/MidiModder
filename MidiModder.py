@@ -1,4 +1,4 @@
-#Midi-Modder 0.2.1 by FroggestSpirit
+#Midi-Modder 0.2.2 by FroggestSpirit
 #Parses Midi files to text for editing then back to midi
 #Make backups, this can overwrite files without confirmation
 import sys
@@ -6,7 +6,7 @@ import math
 
 echo=True
 mode=0
-print("Midi-Modder 0.2.1\n")
+print("Midi-Modder 0.2.2\n")
 if(len(sys.argv)<2):
 	print("Try running "+sys.argv[0]+" -h for usage.")
 	sys.exit()
@@ -42,7 +42,6 @@ if(len(sys.argv)<4):
 		while(filePos<fileSize):
 			if(trackEnd):
 				trackStart.append(filePos)
-				trackPos.append(filePos)
 				lastTrackCommand.append(0)
 				trackDelay.append(0)#get the first delay value
 				val=midiFile[filePos]
@@ -63,6 +62,7 @@ if(len(sys.argv)<4):
 							val=midiFile[filePos]
 							filePos+=1
 				trackDelay[trackNum]+=(val&0x7F)
+				trackPos.append(filePos)
 				filePos=trackStart[trackNum]
 				trackEnd=False
 
@@ -194,16 +194,13 @@ if(len(sys.argv)<4):
 								#end of track
 								trackPos[i]=0
 								tracksDone+=1
+								trackDelay[i]=0x0FFFFF
 							else:
 								arg1=midiFile[trackPos[i]]
 								trackPos[i]+=arg1+1
 						
-						trackDelay[i]=0
-						val=midiFile[trackPos[i]]
-						trackPos[i]+=1
-						if(val>0x7F):
-							trackDelay[i]+=(val&0x7F)
-							trackDelay[i]*=0x80
+						if(trackPos[i]>0):
+							trackDelay[i]=0
 							val=midiFile[trackPos[i]]
 							trackPos[i]+=1
 							if(val>0x7F):
@@ -216,7 +213,12 @@ if(len(sys.argv)<4):
 									trackDelay[i]*=0x80
 									val=midiFile[trackPos[i]]
 									trackPos[i]+=1
-						trackDelay[i]+=(val&0x7F)
+									if(val>0x7F):
+										trackDelay[i]+=(val&0x7F)
+										trackDelay[i]*=0x80
+										val=midiFile[trackPos[i]]
+										trackPos[i]+=1
+							trackDelay[i]+=(val&0x7F)
 			if(polyphony>maxPoly): maxPoly=polyphony
 		print("Max Polyphony: "+str(maxPoly)+"\n")
 		print("Instruments Used: ")
