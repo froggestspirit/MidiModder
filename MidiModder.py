@@ -6,7 +6,7 @@ import math
 
 echo=True
 mode=0
-print("Midi-Modder 0.1\n")
+print("Midi-Modder 0.2.1\n")
 if(len(sys.argv)<2):
 	print("Try running "+sys.argv[0]+" -h for usage.")
 	sys.exit()
