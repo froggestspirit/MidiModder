@@ -1,21 +1,34 @@
-#Midi-Modder 0.2.2 by FroggestSpirit
+#Midi-Modder 0.3 by FroggestSpirit
 #Parses Midi files to text for editing then back to midi
 #Make backups, this can overwrite files without confirmation
 import sys
 import math
 
+sysargv=sys.argv
 echo=True
 mode=0
-print("Midi-Modder 0.2.2\n")
-if(len(sys.argv)<2):
-	print("Try running "+sys.argv[0]+" -h for usage.")
+print("Midi-Modder 0.3\n")
+if(len(sysargv)<2):
+	print("Try running "+sysargv[0]+" -h for usage.")
 	sys.exit()
-if(len(sys.argv)<4):
-	if(sys.argv[1]=="-h" or sys.argv[1]=="--help"):
-		print("Usage: "+sys.argv[0]+" mode input output\nMode:\t-e\tEncode text file to Midi\n\t-d\tDecode Midi to text file\n\t-a\tAnalyze the Midi and display information\n\t-h\tShow this help message")
+if(len(sysargv)==2):
+	if(sysargv[1].find(".mid")!=-1):
+		sysargv.append(sysargv[1])
+		sysargv.append(sysargv[1].replace(".mid",".txt"))
+		sysargv[1]="-d"
+	elif(sysargv[1].find(".txt")!=-1):
+		sysargv.append(sysargv[1])
+		sysargv.append(sysargv[1].replace(".txt",".mid"))
+		sysargv[1]="-e"
+	else:
+		print("Try running "+sysargv[0]+" -h for usage.")
 		sys.exit()
-	elif(sys.argv[1]=="-a" or sys.argv[1]=="--analyze"):
-		infile=open(sys.argv[2], "rb")
+if(len(sysargv)<4):
+	if(sysargv[1]=="-h" or sysargv[1]=="--help"):
+		print("Usage: "+sysargv[0]+" mode input output\nMode:\t-e\tEncode text file to Midi\n\t-d\tDecode Midi to text file\n\t-a\tAnalyze the Midi and display information\n\t-h\tShow this help message")
+		sys.exit()
+	elif(sysargv[1]=="-a" or sysargv[1]=="--analyze"):
+		infile=open(sysargv[2], "rb")
 		midiFile=infile.read()
 		infile.close()
 
@@ -226,14 +239,14 @@ if(len(sys.argv)<4):
 			if(instUsed[i]): print(str(i)+", ")
 		sys.exit()
 	else:
-		print("Try running "+sys.argv[0]+" -h for usage.")
+		print("Try running "+sysargv[0]+" -h for usage.")
 		sys.exit()
 
-if(sys.argv[2]==sys.argv[3]):
+if(sysargv[2]==sysargv[3]):
 	print("Input and output files cannot be the same")
 	sys.exit()
-if(sys.argv[1]=="-d" or sys.argv[1]=="--decode"):
-	infile=open(sys.argv[2], "rb")
+if(sysargv[1]=="-d" or sysargv[1]=="--decode"):
+	infile=open(sysargv[2], "rb")
 	midiFile=infile.read()
 	infile.close()
 
@@ -250,7 +263,7 @@ if(sys.argv[1]=="-d" or sys.argv[1]=="--decode"):
 	if(echo): print("Time Division: "+str(timeDivision))
 	trackEnd=True
 	lastCommand=0
-	outfile=open(sys.argv[3],"w")
+	outfile=open(sysargv[3],"w")
 	outfile.write("TimeDivision:"+str(timeDivision)+"\n\n")
 	filePos=16+headerSize #Skip 'MTrk' and tracksize
 	trackNum=-1
@@ -402,10 +415,10 @@ if(sys.argv[1]=="-d" or sys.argv[1]=="--decode"):
 						if(i==arg1-1): outfile.write(str(arg2))	
 				outfile.write("\n")		
 	outfile.close()
-elif(sys.argv[1]=="-e" or sys.argv[1]=="--encode"):
+elif(sysargv[1]=="-e" or sysargv[1]=="--encode"):
 	Done=False
 	lineNum=0
-	infile=open(sys.argv[2], "r")
+	infile=open(sysargv[2], "r")
 	thisLine=""
 	while(len(thisLine)==0 and not Done):
 		thisLine=infile.readline()
@@ -623,7 +636,7 @@ elif(sys.argv[1]=="-e" or sys.argv[1]=="--encode"):
 	midiSize=len(midiFile)
 	header=str(chr(midiFile[filePos-9]))+str(chr(midiFile[filePos-8]))+str(chr(midiFile[filePos-7]))+str(chr(midiFile[filePos-6]))
 	if(header=="MTrk"): midiSize-=9#remove unneeded track header
-	outfile=open(sys.argv[3],"wb")
+	outfile=open(sysargv[3],"wb")
 	for i in range(midiSize):
 		outfile.write(midiFile[i].to_bytes(1,byteorder='little'))
 	outfile.close()
