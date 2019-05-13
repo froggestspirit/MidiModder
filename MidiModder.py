@@ -217,7 +217,7 @@ if(len(sys.argv)<4):
 									val=midiFile[trackPos[i]]
 									trackPos[i]+=1
 						trackDelay[i]+=(val&0x7F)
-					if(polyphony>maxPoly): maxPoly=polyphony
+			if(polyphony>maxPoly): maxPoly=polyphony
 		print("Max Polyphony: "+str(maxPoly)+"\n")
 		print("Instruments Used: ")
 		for i in range(128): 
