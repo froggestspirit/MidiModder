@@ -1,4 +1,5 @@
-#Midi-Modder 0.3 by FroggestSpirit
+#Midi-Modder by FroggestSpirit
+version="0.4"
 #Parses Midi files to text for editing then back to midi
 #Make backups, this can overwrite files without confirmation
 import sys
@@ -17,6 +18,7 @@ def get_note_length(tempPos,chan,note):
 	Done=False
 	tempPos=tempPos
 	noteLen=0
+	lastTempCommand=0x90+chan
 	while(not Done):
 		delay=0
 		val=midiFile[tempPos]
@@ -95,246 +97,49 @@ def get_note_length(tempPos,chan,note):
 sysargv=sys.argv
 echo=True
 mode=0
-print("Midi-Modder 0.3\n")
-if(len(sysargv)<2):
-	print("Try running "+sysargv[0]+" -h for usage.")
-	sys.exit()
-if(len(sysargv)==2):
-	if(sysargv[1].find(".mid")!=-1):
-		sysargv.append(sysargv[1])
-		sysargv.append(sysargv[1].replace(".mid",".txt"))
-		sysargv[1]="-d"
-	elif(sysargv[1].find(".txt")!=-1):
-		sysargv.append(sysargv[1])
-		sysargv.append(sysargv[1].replace(".txt",".mid"))
-		sysargv[1]="-e"
+print("Midi-Modder "+version+"\n")
+infileArg=-1;
+outfileArg=-1;
+for i in range(len(sysargv)):
+	if(i>0):
+		if(sysargv[i].startswith("-")):
+			if(sysargv[i]=="-d" or sysargv[i]=="--decode"):
+				mode=1
+			elif(sysargv[i]=="-e" or sysargv[i]=="--encode"):
+				mode=2
+			elif(sysargv[i]=="-a" or sysargv[i]=="--analyze"):
+				mode=3
+			elif(sysargv[i]=="-h" or sysargv[i]=="--help"):
+				mode=0
+			elif(sysargv[i]=="-l"):
+				noteLengthArg=True
+		else:
+			if(infileArg==-1): infileArg=i
+			elif(outfileArg==-1): outfileArg=i
+			
+if(infileArg==-1):
+	mode=0
+else:
+	if(outfileArg==-1):
+		if(sysargv[infileArg].find(".mid")!=-1):
+			if(mode==0): mode=1
+			outfileArg=len(sysargv)
+			sysargv.append(sysargv[infileArg].replace(".mid",".txt"))
+		elif(sysargv[infileArg].find(".txt")!=-1):
+			if(mode==0): mode=2
+			outfileArg=len(sysargv)
+			sysargv.append(sysargv[infileArg].replace(".txt",".mid"))
+		else:
+			mode=0
 	else:
-		print("Try running "+sysargv[0]+" -h for usage.")
-		sys.exit()
-if(len(sysargv)<4):
-	if(sysargv[1]=="-h" or sysargv[1]=="--help"):
-		print("Usage: "+sysargv[0]+" mode input output\nMode:\t-e\tEncode text file to Midi\n\t-d\tDecode Midi to text file\n\t-a\tAnalyze the Midi and display information\n\t-h\tShow this help message")
-		sys.exit()
-	elif(sysargv[1]=="-a" or sysargv[1]=="--analyze"):
-		infile=open(sysargv[2], "rb")
-		midiFile=infile.read()
-		infile.close()
-
-		fileSize=len(midiFile)
-		header=str(chr(midiFile[0]))+str(chr(midiFile[1]))+str(chr(midiFile[2]))+str(chr(midiFile[3]))
-		if(header!="MThd"):
-			print("Not a MIDI file.")
+		if(sysargv[infileArg]==sysargv[outfileArg]):
+			print("Input and output files cannot be the same")
 			sys.exit()
-		headerSize=midiFile[7]+(midiFile[6]*0x100)+(midiFile[5]*0x10000)+(midiFile[4]*0x1000000)
-		numTracks=midiFile[11]+(midiFile[10]*256)
-		timeDivision=midiFile[13]+(midiFile[12]*256)
-		if(echo): print("File Size: "+str(fileSize))
-		if(echo): print("Number of Tracks: "+str(numTracks))
-		if(echo): print("Time Division: "+str(timeDivision))
-		trackStart=[]
-		trackPos=[]
-		trackDelay=[]
-		lastTrackCommand=[]
-		trackEnd=True
-		lastCommand=0
-		filePos=16+headerSize #Skip 'MTrk' and tracksize
-		trackNum=0
-		#get the track start locations
-		while(filePos<fileSize):
-			if(trackEnd):
-				trackStart.append(filePos)
-				lastTrackCommand.append(0)
-				trackDelay.append(0)#get the first delay value
-				val=midiFile[filePos]
-				filePos+=1
-				if(val>0x7F):
-					trackDelay[trackNum]+=(val&0x7F)
-					trackDelay[trackNum]*=0x80
-					val=midiFile[filePos]
-					filePos+=1
-					if(val>0x7F):
-						trackDelay[trackNum]+=(val&0x7F)
-						trackDelay[trackNum]*=0x80
-						val=midiFile[filePos]
-						filePos+=1
-						if(val>0x7F):
-							trackDelay[trackNum]+=(val&0x7F)
-							trackDelay[trackNum]*=0x80
-							val=midiFile[filePos]
-							filePos+=1
-				trackDelay[trackNum]+=(val&0x7F)
-				trackPos.append(filePos)
-				filePos=trackStart[trackNum]
-				trackEnd=False
-
-			delay=0
-			val=midiFile[filePos]
-			filePos+=1
-			if(val>0x7F):
-				delay+=(val&0x7F)
-				delay*=0x80
-				val=midiFile[filePos]
-				filePos+=1
-				if(val>0x7F):
-					delay+=(val&0x7F)
-					delay*=0x80
-					val=midiFile[filePos]
-					filePos+=1
-					if(val>0x7F):
-						delay+=(val&0x7F)
-						delay*=0x80
-						val=midiFile[filePos]
-						filePos+=1
-			delay+=(val&0x7F)
-
-			command=midiFile[filePos]
-			filePos+=1
-			textCommand=""
-			if(command<0x80):
-				command=lastCommand
-				filePos-=1
-			lastCommand=command
-			if((command&0xF0)==0x80):
-				#note off
-				filePos+=2
-			elif((command&0xF0)==0x90):
-				#note on
-				filePos+=2
-			elif((command&0xF0)==0xA0):
-				#key pressure
-				filePos+=2
-			elif((command&0xF0)==0xB0):
-				#controller change
-				filePos+=2
-			elif((command&0xF0)==0xC0):
-				#program change
-				filePos+=1
-			elif((command&0xF0)==0xD0):
-				#channel pressure
-				filePos+=1
-			elif((command&0xF0)==0xE0):
-				#pitch bend
-				filePos+=2
-			elif(command==0xF0 or command==0xF7):
-				#sys-ex event
-				arg1=midiFile[filePos]
-				filePos+=arg1+1
-			elif(command==0xFF):
-				#meta event
-				arg1=midiFile[filePos]
-				filePos+=1
-				if(arg1==0x2F):
-					#end of track
-					filePos+=9#skip next 'MTrk' and tracklength
-					lastCommand=0
-					trackEnd=True
-					trackNum+=1
-				else:
-					arg1=midiFile[filePos]
-					filePos+=arg1+1
-					
-		#simulate the midi
-		polyphony=0
-		maxPoly=0
-		instUsed=[]
-		for i in range(128): instUsed.append(False)
-		numTracks=len(trackStart)
-		tracksDone=0
-		while(tracksDone<numTracks):
-			for i in range(numTracks):
-				if(trackPos[i]>0):
-					trackDelay[i]-=1;
-					while(trackDelay[i]<=0):
-						command=midiFile[trackPos[i]]
-						trackPos[i]+=1
-						textCommand=""
-						if(command<0x80):
-							command=lastTrackCommand[i]
-							trackPos[i]-=1
-						lastTrackCommand[i]=command
-						if((command&0xF0)==0x80):
-							#note off
-							if(polyphony>0): polyphony-=1
-							trackPos[i]+=2
-						elif((command&0xF0)==0x90):
-							#note on
-							arg1=midiFile[trackPos[i]]
-							trackPos[i]+=1
-							arg2=midiFile[trackPos[i]]
-							trackPos[i]+=1
-							if(arg2==0):
-								if(polyphony>0): polyphony-=1#velocity of 0 is the same as note off
-							else:
-								polyphony+=1
-						elif((command&0xF0)==0xA0):
-							#key pressure
-							trackPos[i]+=2
-						elif((command&0xF0)==0xB0):
-							#controller change
-							trackPos[i]+=2
-						elif((command&0xF0)==0xC0):
-							#program change
-							arg1=midiFile[trackPos[i]]
-							instUsed[arg1]=True
-							trackPos[i]+=1
-						elif((command&0xF0)==0xD0):
-							#channel pressure
-							trackPos[i]+=1
-						elif((command&0xF0)==0xE0):
-							#pitch bend
-							trackPos[i]+=2
-						elif(command==0xF0 or command==0xF7):
-							#sys-ex event
-							arg1=midiFile[trackPos[i]]
-							trackPos[i]+=arg1+1
-						elif(command==0xFF):
-							#meta event
-							arg1=midiFile[trackPos[i]]
-							trackPos[i]+=1
-							if(arg1==0x2F):
-								#end of track
-								trackPos[i]=0
-								tracksDone+=1
-								trackDelay[i]=0x0FFFFF
-							else:
-								arg1=midiFile[trackPos[i]]
-								trackPos[i]+=arg1+1
-						
-						if(trackPos[i]>0):
-							trackDelay[i]=0
-							val=midiFile[trackPos[i]]
-							trackPos[i]+=1
-							if(val>0x7F):
-								trackDelay[i]+=(val&0x7F)
-								trackDelay[i]*=0x80
-								val=midiFile[trackPos[i]]
-								trackPos[i]+=1
-								if(val>0x7F):
-									trackDelay[i]+=(val&0x7F)
-									trackDelay[i]*=0x80
-									val=midiFile[trackPos[i]]
-									trackPos[i]+=1
-									if(val>0x7F):
-										trackDelay[i]+=(val&0x7F)
-										trackDelay[i]*=0x80
-										val=midiFile[trackPos[i]]
-										trackPos[i]+=1
-							trackDelay[i]+=(val&0x7F)
-			if(polyphony>maxPoly): maxPoly=polyphony
-		print("Max Polyphony: "+str(maxPoly)+"\n")
-		print("Instruments Used: ")
-		for i in range(128): 
-			if(instUsed[i]): print(str(i)+", ")
-		sys.exit()
-	else:
-		print("Try running "+sysargv[0]+" -h for usage.")
-		sys.exit()
-
-if(sysargv[2]==sysargv[3]):
-	print("Input and output files cannot be the same")
+if(mode==0): #Help
+	print("Usage: "+sysargv[0]+" input [mode] [output] [flags]\nMode:\n\t-e\tEncode text file to Midi\n\t-d\tDecode Midi to text file\n\t-a\tAnalyze the Midi and display information\n\t-h\tShow this help message\n\nAdditional Flags:\n\t-l\tNote length added to NoteOn")
 	sys.exit()
-if(sysargv[1]=="-d" or sysargv[1]=="--decode"):
-	infile=open(sysargv[2], "rb")
+elif(mode==1): #decode
+	infile=open(sysargv[infileArg], "rb")
 	midiFile=infile.read()
 	infile.close()
 
@@ -351,7 +156,7 @@ if(sysargv[1]=="-d" or sysargv[1]=="--decode"):
 	if(echo): print("Time Division: "+str(timeDivision))
 	trackEnd=True
 	lastCommand=0
-	outfile=open(sysargv[3],"w")
+	outfile=open(sysargv[outfileArg],"w")
 	outfile.write("TimeDivision:"+str(timeDivision)+"\n\n")
 	filePos=16+headerSize #Skip 'MTrk' and tracksize
 	trackNum=-1
@@ -516,11 +321,11 @@ if(sysargv[1]=="-d" or sysargv[1]=="--decode"):
 						if(i==arg1-1): outfile.write(str(arg2))	
 				outfile.write("\n")		
 	outfile.close()
-elif(sysargv[1]=="-e" or sysargv[1]=="--encode"):
+elif(mode==2): #encode
 	Done=False
 	notesOn=[]
 	lineNum=0
-	infile=open(sysargv[2], "r")
+	infile=open(sysargv[infileArg], "r")
 	thisLine=""
 	while(len(thisLine)==0 and not Done):
 		thisLine=infile.readline()
@@ -786,9 +591,217 @@ elif(sysargv[1]=="-e" or sysargv[1]=="--encode"):
 	midiSize=len(midiFile)
 	header=str(chr(midiFile[filePos-9]))+str(chr(midiFile[filePos-8]))+str(chr(midiFile[filePos-7]))+str(chr(midiFile[filePos-6]))
 	if(header=="MTrk"): midiSize-=9#remove unneeded track header
-	outfile=open(sysargv[3],"wb")
+	outfile=open(sysargv[outfileArg],"wb")
 	for i in range(midiSize):
 		outfile.write(midiFile[i].to_bytes(1,byteorder='little'))
 	outfile.close()
-else:
-	print("Invalid usage")
+elif(mode==3): #analyze
+	infile=open(sysargv[infileArg], "rb")
+	midiFile=infile.read()
+	infile.close()
+
+	fileSize=len(midiFile)
+	header=str(chr(midiFile[0]))+str(chr(midiFile[1]))+str(chr(midiFile[2]))+str(chr(midiFile[3]))
+	if(header!="MThd"):
+		print("Not a MIDI file.")
+		sys.exit()
+	headerSize=midiFile[7]+(midiFile[6]*0x100)+(midiFile[5]*0x10000)+(midiFile[4]*0x1000000)
+	numTracks=midiFile[11]+(midiFile[10]*256)
+	timeDivision=midiFile[13]+(midiFile[12]*256)
+	if(echo): print("File Size: "+str(fileSize))
+	if(echo): print("Number of Tracks: "+str(numTracks))
+	if(echo): print("Time Division: "+str(timeDivision))
+	trackStart=[]
+	trackPos=[]
+	trackDelay=[]
+	lastTrackCommand=[]
+	trackEnd=True
+	lastCommand=0
+	filePos=16+headerSize #Skip 'MTrk' and tracksize
+	trackNum=0
+	#get the track start locations
+	while(filePos<fileSize):
+		if(trackEnd):
+			trackStart.append(filePos)
+			lastTrackCommand.append(0)
+			trackDelay.append(0)#get the first delay value
+			val=midiFile[filePos]
+			filePos+=1
+			if(val>0x7F):
+				trackDelay[trackNum]+=(val&0x7F)
+				trackDelay[trackNum]*=0x80
+				val=midiFile[filePos]
+				filePos+=1
+				if(val>0x7F):
+					trackDelay[trackNum]+=(val&0x7F)
+					trackDelay[trackNum]*=0x80
+					val=midiFile[filePos]
+					filePos+=1
+					if(val>0x7F):
+						trackDelay[trackNum]+=(val&0x7F)
+						trackDelay[trackNum]*=0x80
+						val=midiFile[filePos]
+						filePos+=1
+			trackDelay[trackNum]+=(val&0x7F)
+			trackPos.append(filePos)
+			filePos=trackStart[trackNum]
+			trackEnd=False
+
+		delay=0
+		val=midiFile[filePos]
+		filePos+=1
+		if(val>0x7F):
+			delay+=(val&0x7F)
+			delay*=0x80
+			val=midiFile[filePos]
+			filePos+=1
+			if(val>0x7F):
+				delay+=(val&0x7F)
+				delay*=0x80
+				val=midiFile[filePos]
+				filePos+=1
+				if(val>0x7F):
+					delay+=(val&0x7F)
+					delay*=0x80
+					val=midiFile[filePos]
+					filePos+=1
+		delay+=(val&0x7F)
+
+		command=midiFile[filePos]
+		filePos+=1
+		textCommand=""
+		if(command<0x80):
+			command=lastCommand
+			filePos-=1
+		lastCommand=command
+		if((command&0xF0)==0x80):
+			#note off
+			filePos+=2
+		elif((command&0xF0)==0x90):
+			#note on
+			filePos+=2
+		elif((command&0xF0)==0xA0):
+			#key pressure
+			filePos+=2
+		elif((command&0xF0)==0xB0):
+			#controller change
+			filePos+=2
+		elif((command&0xF0)==0xC0):
+			#program change
+			filePos+=1
+		elif((command&0xF0)==0xD0):
+			#channel pressure
+			filePos+=1
+		elif((command&0xF0)==0xE0):
+			#pitch bend
+			filePos+=2
+		elif(command==0xF0 or command==0xF7):
+			#sys-ex event
+			arg1=midiFile[filePos]
+			filePos+=arg1+1
+		elif(command==0xFF):
+			#meta event
+			arg1=midiFile[filePos]
+			filePos+=1
+			if(arg1==0x2F):
+				#end of track
+				filePos+=9#skip next 'MTrk' and tracklength
+				lastCommand=0
+				trackEnd=True
+				trackNum+=1
+			else:
+				arg1=midiFile[filePos]
+				filePos+=arg1+1
+				
+	#simulate the midi
+	polyphony=0
+	maxPoly=0
+	instUsed=[]
+	for i in range(128): instUsed.append(False)
+	numTracks=len(trackStart)
+	tracksDone=0
+	while(tracksDone<numTracks):
+		for i in range(numTracks):
+			if(trackPos[i]>0):
+				trackDelay[i]-=1;
+				while(trackDelay[i]<=0):
+					command=midiFile[trackPos[i]]
+					trackPos[i]+=1
+					textCommand=""
+					if(command<0x80):
+						command=lastTrackCommand[i]
+						trackPos[i]-=1
+					lastTrackCommand[i]=command
+					if((command&0xF0)==0x80):
+						#note off
+						if(polyphony>0): polyphony-=1
+						trackPos[i]+=2
+					elif((command&0xF0)==0x90):
+						#note on
+						arg1=midiFile[trackPos[i]]
+						trackPos[i]+=1
+						arg2=midiFile[trackPos[i]]
+						trackPos[i]+=1
+						if(arg2==0):
+							if(polyphony>0): polyphony-=1#velocity of 0 is the same as note off
+						else:
+							polyphony+=1
+					elif((command&0xF0)==0xA0):
+						#key pressure
+						trackPos[i]+=2
+					elif((command&0xF0)==0xB0):
+						#controller change
+						trackPos[i]+=2
+					elif((command&0xF0)==0xC0):
+						#program change
+						arg1=midiFile[trackPos[i]]
+						instUsed[arg1]=True
+						trackPos[i]+=1
+					elif((command&0xF0)==0xD0):
+						#channel pressure
+						trackPos[i]+=1
+					elif((command&0xF0)==0xE0):
+						#pitch bend
+						trackPos[i]+=2
+					elif(command==0xF0 or command==0xF7):
+						#sys-ex event
+						arg1=midiFile[trackPos[i]]
+						trackPos[i]+=arg1+1
+					elif(command==0xFF):
+						#meta event
+						arg1=midiFile[trackPos[i]]
+						trackPos[i]+=1
+						if(arg1==0x2F):
+							#end of track
+							trackPos[i]=0
+							tracksDone+=1
+							trackDelay[i]=0x0FFFFF
+						else:
+							arg1=midiFile[trackPos[i]]
+							trackPos[i]+=arg1+1
+					
+					if(trackPos[i]>0):
+						trackDelay[i]=0
+						val=midiFile[trackPos[i]]
+						trackPos[i]+=1
+						if(val>0x7F):
+							trackDelay[i]+=(val&0x7F)
+							trackDelay[i]*=0x80
+							val=midiFile[trackPos[i]]
+							trackPos[i]+=1
+							if(val>0x7F):
+								trackDelay[i]+=(val&0x7F)
+								trackDelay[i]*=0x80
+								val=midiFile[trackPos[i]]
+								trackPos[i]+=1
+								if(val>0x7F):
+									trackDelay[i]+=(val&0x7F)
+									trackDelay[i]*=0x80
+									val=midiFile[trackPos[i]]
+									trackPos[i]+=1
+						trackDelay[i]+=(val&0x7F)
+		if(polyphony>maxPoly): maxPoly=polyphony
+	print("Max Polyphony: "+str(maxPoly)+"\n")
+	print("Instruments Used: ")
+	for i in range(128): 
+		if(instUsed[i]): print(str(i)+", ")
