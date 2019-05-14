@@ -1,5 +1,5 @@
 #Midi-Modder by FroggestSpirit
-version="0.4"
+version="0.4.1"
 #Parses Midi files to text for editing then back to midi
 #Make backups, this can overwrite files without confirmation
 import sys
@@ -165,6 +165,7 @@ elif(mode==1): #decode
 			outfile.write("StartTrack\n")
 			trackEnd=False
 			delay=0
+			totalTrackLength=0
 		curDelay=0
 		val=midiFile[filePos]
 		filePos+=1
@@ -196,6 +197,7 @@ elif(mode==1): #decode
 		if((command&0xF0)!=0x80):
 			if(delay>0):
 				outfile.write("Delay:"+str(delay)+"\n")
+				totalTrackLength+=delay
 				delay=0
 		if((command&0xF0)==0x80):
 			#note off
@@ -210,6 +212,7 @@ elif(mode==1): #decode
 			if(noteLengthArg==False):
 				if(delay>0):
 					outfile.write("Delay:"+str(delay)+"\n")
+					totalTrackLength+=delay
 					delay=0
 				outfile.write(textCommand+str(arg1)+","+str(arg2)+"\n")
 		elif((command&0xF0)==0x90):
@@ -300,7 +303,8 @@ elif(mode==1): #decode
 				textMode=False
 			if(arg1==0x2F):
 				#end of track
-				outfile.write("EndTrack\n\n")
+				outfile.write("EndTrack\n")
+				outfile.write(";Track Length: "+str(totalTrackLength)+"\n\n")
 				filePos+=9#skip next 'MTrk' and tracklength
 				lastCommand=0
 				trackEnd=True
