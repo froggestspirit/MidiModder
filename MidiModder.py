@@ -4,6 +4,94 @@
 import sys
 import math
 
+noteLengthArg=False
+
+class Note:
+  def __init__(self, track, arg1, arg2, length):
+    self.track = track
+    self.arg1 = arg1
+    self.arg2 = arg2
+    self.length = length
+	
+def get_note_length(tempPos,chan,note):
+	Done=False
+	tempPos=tempPos
+	noteLen=0
+	while(not Done):
+		delay=0
+		val=midiFile[tempPos]
+		tempPos+=1
+		if(val>0x7F):
+			delay+=(val&0x7F)
+			delay*=0x80
+			val=midiFile[tempPos]
+			tempPos+=1
+			if(val>0x7F):
+				delay+=(val&0x7F)
+				delay*=0x80
+				val=midiFile[tempPos]
+				tempPos+=1
+				if(val>0x7F):
+					delay+=(val&0x7F)
+					delay*=0x80
+					val=midiFile[tempPos]
+					tempPos+=1
+		delay+=(val&0x7F)
+		noteLen+=delay
+		
+		tempCommand=midiFile[tempPos]
+		tempPos+=1
+		textCommand=""
+		if(tempCommand<0x80):
+			tempCommand=lastTempCommand
+			tempPos-=1
+		lastTempCommand=tempCommand
+		if((tempCommand&0xF0)==0x80):
+			#note off
+			tempArg1=midiFile[tempPos]
+			tempPos+=1
+			tempArg2=midiFile[tempPos]
+			tempPos+=1
+			if(tempArg1==note and (tempCommand&0xF)==chan):	Done=True
+		elif((tempCommand&0xF0)==0x90):
+			#note on
+			tempArg1=midiFile[tempPos]
+			tempPos+=1
+			tempArg2=midiFile[tempPos]
+			tempPos+=1
+			if(tempArg2==0 and tempArg1==note and (tempCommand&0xF)==chan):	Done=True
+		elif((tempCommand&0xF0)==0xA0):
+			#key pressure
+			tempPos+=2
+		elif((tempCommand&0xF0)==0xB0):
+			#controller change
+			tempPos+=2
+		elif((tempCommand&0xF0)==0xC0):
+			#program change
+			tempPos+=1
+		elif((tempCommand&0xF0)==0xD0):
+			#channel pressure
+			tempPos+=1
+		elif((tempCommand&0xF0)==0xE0):
+			#pitch bend
+			tempPos+=2
+		elif(tempCommand==0xF0 or tempCommand==0xF7):
+			#sys-ex event
+			tempArg1=midiFile[tempPos]
+			tempPos+=tempArg1+1
+		elif(tempCommand==0xFF):
+			#meta event
+			tempArg1=midiFile[tempPos]
+			tempPos+=1
+			if(tempArg1==0x2F):
+				#end of track
+				Done=True
+			else:
+				tempArg1=midiFile[tempPos]
+				tempPos+=tempArg1+1
+	return noteLen
+	
+				
 sysargv=sys.argv
 echo=True
 mode=0
@@ -309,7 +397,7 @@ if(sysargv[1]=="-d" or sysargv[1]=="--decode"):
 			filePos+=1
 			arg2=midiFile[filePos]
 			filePos+=1
-			outfile.write(textCommand+str(arg1)+","+str(arg2)+"\n")
+			if(noteLengthArg==False): outfile.write(textCommand+str(arg1)+","+str(arg2)+"\n")
 		elif((command&0xF0)==0x90):
 			#note on
 			if(trackNum!=str(command&0xF)):
@@ -320,7 +408,11 @@ if(sysargv[1]=="-d" or sysargv[1]=="--decode"):
 			filePos+=1
 			arg2=midiFile[filePos]
 			filePos+=1
-			outfile.write(textCommand+str(arg1)+","+str(arg2)+"\n")
+			if(noteLengthArg):
+				noteLength=get_note_length(filePos,command&0xF,arg1)
+				outfile.write(textCommand+str(arg1)+","+str(arg2)+","+str(noteLength)+"\n")
+			else:
+				outfile.write(textCommand+str(arg1)+","+str(arg2)+"\n")
 		elif((command&0xF0)==0xA0):
 			#key pressure
 			if(trackNum!=str(command&0xF)):
@@ -417,6 +509,7 @@ if(sysargv[1]=="-d" or sysargv[1]=="--decode"):
 	outfile.close()
 elif(sysargv[1]=="-e" or sysargv[1]=="--encode"):
 	Done=False
+	notesOn=[]
 	lineNum=0
 	infile=open(sysargv[2], "r")
 	thisLine=""
@@ -509,6 +602,46 @@ elif(sysargv[1]=="-e" or sysargv[1]=="--encode"):
 				filePos-=1
 				thisDelay=int(argument[0],10)
 				if(thisDelay>0xFFFFFFF): thisDelay=0xFFFFFFF
+				
+				if(len(notesOn)>0):
+					notesToEnd=0
+					for i in range(len(notesOn)):
+						if(notesOn[i].length<=thisDelay): notesToEnd+=1
+					for n in range(notesToEnd):
+						soonestNote=0xFFFFFFF
+						for i in range(len(notesOn)):
+							if(notesOn[i].length<soonestNote):
+								soonestNote=notesOn[i].length
+								soonestNoteID=i
+						for i in range(len(notesOn)):
+							notesOn[i].length-=soonestNote
+						thisDelay-=soonestNote
+						thisByte=[]
+						length=0
+						while(soonestNote>0):
+							thisByte.append((soonestNote & 127))
+							soonestNote-=thisByte[length]
+							soonestNote=int(soonestNote/128)
+							if(length>0): thisByte[length]+=128
+							length+=1
+						if(length==0): length=1
+						if(len(thisByte)==0): thisByte.append(0)
+						if(len(midiFile)<filePos+1): midiFile.append(0)
+						midiFile[filePos]=thisByte[length-1]
+						filePos+=1
+						length-=1
+						while(length>0):
+							midiFile.append(thisByte[length-1])
+							filePos+=1
+							length-=1
+						midiFile.append(0x80+notesOn[soonestNoteID].track)
+						filePos+=1
+						midiFile.append(notesOn[soonestNoteID].arg1)
+						filePos+=1
+						midiFile.append(notesOn[soonestNoteID].arg2)
+						filePos+=1
+						del notesOn[soonestNoteID]
+						
 				thisByte=[]
 				length=0
 				while(thisDelay>0):
@@ -518,6 +651,8 @@ elif(sysargv[1]=="-e" or sysargv[1]=="--encode"):
 					if(length>0): thisByte[length]+=128
 					length+=1
 				if(length==0): length=1
+				if(len(thisByte)==0): thisByte.append(0)
+				if(len(midiFile)<filePos+1): midiFile.append(0)
 				midiFile[filePos]=thisByte[length-1]
 				filePos+=1
 				length-=1
@@ -544,6 +679,8 @@ elif(sysargv[1]=="-e" or sysargv[1]=="--encode"):
 				midiFile.append(int(argument[1],10))
 				filePos+=1
 				channelData=True
+				if(len(argument)>2):
+					notesOn.append(Note(trackNum,int(argument[0],10),int(argument[1],10),int(argument[2],10)))
 			elif(thisLine.startswith("PolyPressure:")):
 				argument=command[1].split(",")
 				midiFile.append(0xA0+trackNum)
