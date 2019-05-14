@@ -359,26 +359,27 @@ if(sysargv[1]=="-d" or sysargv[1]=="--decode"):
 		if(trackEnd):
 			outfile.write("StartTrack\n")
 			trackEnd=False
-		delay=0
+			delay=0
+		curDelay=0
 		val=midiFile[filePos]
 		filePos+=1
 		if(val>0x7F):
-			delay+=(val&0x7F)
-			delay*=0x80
+			curDelay+=(val&0x7F)
+			curDelay*=0x80
 			val=midiFile[filePos]
 			filePos+=1
 			if(val>0x7F):
-				delay+=(val&0x7F)
-				delay*=0x80
+				curDelay+=(val&0x7F)
+				curDelay*=0x80
 				val=midiFile[filePos]
 				filePos+=1
 				if(val>0x7F):
-					delay+=(val&0x7F)
-					delay*=0x80
+					curDelay+=(val&0x7F)
+					curDelay*=0x80
 					val=midiFile[filePos]
 					filePos+=1
-		delay+=(val&0x7F)
-		if(delay>0): outfile.write("Delay:"+str(delay)+"\n")
+		curDelay+=(val&0x7F)
+		delay+=curDelay
 
 		command=midiFile[filePos]
 		filePos+=1
@@ -387,6 +388,10 @@ if(sysargv[1]=="-d" or sysargv[1]=="--decode"):
 			command=lastCommand
 			filePos-=1
 		lastCommand=command
+		if((command&0xF0)!=0x80):
+			if(delay>0):
+				outfile.write("Delay:"+str(delay)+"\n")
+				delay=0
 		if((command&0xF0)==0x80):
 			#note off
 			if(trackNum!=str(command&0xF)):
@@ -397,7 +402,11 @@ if(sysargv[1]=="-d" or sysargv[1]=="--decode"):
 			filePos+=1
 			arg2=midiFile[filePos]
 			filePos+=1
-			if(noteLengthArg==False): outfile.write(textCommand+str(arg1)+","+str(arg2)+"\n")
+			if(noteLengthArg==False):
+				if(delay>0):
+					outfile.write("Delay:"+str(delay)+"\n")
+					delay=0
+				outfile.write(textCommand+str(arg1)+","+str(arg2)+"\n")
 		elif((command&0xF0)==0x90):
 			#note on
 			if(trackNum!=str(command&0xF)):
@@ -408,7 +417,7 @@ if(sysargv[1]=="-d" or sysargv[1]=="--decode"):
 			filePos+=1
 			arg2=midiFile[filePos]
 			filePos+=1
-			if(noteLengthArg):
+			if(noteLengthArg and arg2>0):
 				noteLength=get_note_length(filePos,command&0xF,arg1)
 				outfile.write(textCommand+str(arg1)+","+str(arg2)+","+str(noteLength)+"\n")
 			else:
@@ -613,6 +622,8 @@ elif(sysargv[1]=="-e" or sysargv[1]=="--encode"):
 							if(notesOn[i].length<soonestNote):
 								soonestNote=notesOn[i].length
 								soonestNoteID=i
+							elif(notesOn[i].length==soonestNote):
+								if(notesOn[i].arg1<notesOn[soonestNoteID].arg1): soonestNoteID=i
 						for i in range(len(notesOn)):
 							notesOn[i].length-=soonestNote
 						thisDelay-=soonestNote
@@ -644,6 +655,8 @@ elif(sysargv[1]=="-e" or sysargv[1]=="--encode"):
 						
 				thisByte=[]
 				length=0
+				for i in range(len(notesOn)):
+					notesOn[i].length-=thisDelay
 				while(thisDelay>0):
 					thisByte.append((thisDelay & 127))
 					thisDelay-=thisByte[length]
