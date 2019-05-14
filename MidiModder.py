@@ -272,11 +272,11 @@ elif(mode==1): #decode
 				outfile.write("Track:"+str(command&0xF)+"\n")
 			trackNum=str(command&0xF)
 			textCommand="PitchBend:"
-			arg1=midiFile[filePos]
+			arg1=(midiFile[filePos]&0x7F)
 			filePos+=1
-			arg2=midiFile[filePos]
+			arg2=(midiFile[filePos]&0x7F)
 			filePos+=1
-			outfile.write(textCommand+str((arg1*256)+arg2)+"\n")
+			outfile.write(textCommand+str((arg2*0x80)+arg1)+"\n")
 		elif(command==0xF0 or command==0xF7):
 			#sys-ex event
 			textCommand="SysEvent:"
@@ -536,9 +536,9 @@ elif(mode==2): #encode
 				argument=command[1].split(",")
 				midiFile.append(0xE0+trackNum)
 				filePos+=1
-				midiFile.append(math.floor(int(argument[0],10)/0x100))
+				midiFile.append((int(argument[0],10)%0x80))
 				filePos+=1
-				midiFile.append((int(argument[0],10)%0x100))
+				midiFile.append(math.floor(int(argument[0],10)/0x80))
 				filePos+=1
 				channelData=True
 			elif(thisLine.startswith("MetaEvent_")):
