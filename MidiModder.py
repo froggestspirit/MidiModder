@@ -209,6 +209,7 @@ if(mode == DECODE): #decode
         mode = DECODE
     #elif(header == b'SSEQ'):
     #    mode = DECODE_SSEQ
+    #    noteLengthArg = True
     if(mode == HELP):
         sys.exit()
 
@@ -852,17 +853,32 @@ elif(mode == DECODE): #decode
                 outfile.write("\n")        
     outfile.close()
 elif(mode == DECODE_SSEQ): #decode nds sseq
-    headerSize = read_longb(4)
-    numTracks = read_shortb(10)
-    timeDivision = read_shortb(12)
+    fileSize = read_long(8)
+    nDataOffset = read_long(0x18)
+    filePos = nDataOffset
+    trackUsed[16]
+    trackPointer[16]
+    tracksUsed = read_short(filePos)
+    filePose += 2
+    numTracks = 0
+    for i in range(16):
+        if(tracksUsed & 1 == 1):
+            trackUsed[i] = 1
+            numTracks += 1
+        else:
+            trackUsed[i] = 0
+        tracksUsed = tracksUsed >> 1
     if(echo): print("File Size: " + str(fileSize))
     if(echo): print("Number of Tracks: " + str(numTracks))
-    if(echo): print("Time Division: " + str(timeDivision))
     trackEnd = True
     lastCommand = 0
     outfile = open(sysargv[outfileArg],"w")
-    outfile.write("TimeDivision:" + str(timeDivision) + "\n\n")
-    filePos = 16 + headerSize #Skip 'MTrk' and tracksize
+    for i in range(numTracks - 1):
+        filePos += 1 #skip the 0x93 byte
+        trackPointer[read_byte(filePos)] = read_long(filePos + 1) & 0x00FFFFFF
+        filePos += 4
+    trackPointer[0] = filePos #track 0 starts after the pointers
+
     trackNum = -1
     while(filePos < fileSize):
         if(trackEnd):
@@ -870,12 +886,20 @@ elif(mode == DECODE_SSEQ): #decode nds sseq
             trackEnd = False
             delay = 0
             totalTrackLength = 0
+            trackNum += 1
+            while(trackUsed[trackNum] == 0 && trackNum < 16):
+                trackNum += 1
+            if(trackNum == 16):
+                outfile.close()
+                sys.exit()
+            outfile.write("Track:" + str(trackNum) + "\n")
         curDelay = 0
-        val = read_byte(filePos)
+        command = read_byte(filePos)
         filePos += 1
-        if(val > 0x7F):
-            curDelay += (val & 0x7F)
-            curDelay *= 0x80
+        textCommand = ""
+
+        if((command) == 0x80):
+            #Delay
             val = read_byte(filePos)
             filePos += 1
             if(val > 0x7F):
@@ -888,53 +912,39 @@ elif(mode == DECODE_SSEQ): #decode nds sseq
                     curDelay *= 0x80
                     val = read_byte(filePos)
                     filePos += 1
-        curDelay += (val & 0x7F)
-        delay += curDelay
-
-        command = read_byte(filePos)
-        filePos += 1
-        textCommand = ""
-        if(command < 0x80):
-            command = lastCommand
-            filePos -= 1
-        lastCommand = command
-        if((command & 0xF0) != 0x80):
-            if(delay > 0):
-                outfile.write("Delay:" + str(delay) + "\n")
-                totalTrackLength += delay
-                delay = 0
-        if((command & 0xF0) == 0x80):
-            #note off
-            if(trackNum != str(command & 0xF)):
-                outfile.write("Track:" + str(command & 0xF) + "\n")
-            trackNum = str(command & 0xF)
-            textCommand = "NoteOff:"
-            arg1 = read_byte(filePos)
-            filePos += 1
-            arg2 = read_byte(filePos)
-            filePos += 1
-            if(noteLengthArg == False):
-                if(delay > 0):
-                    outfile.write("Delay:" + str(delay) + "\n")
-                    totalTrackLength += delay
-                    delay = 0
-                outfile.write(textCommand + str(arg1) + "," + str(arg2) + "\n")
-        elif((command & 0xF0) == 0x90):
+                    if(val > 0x7F):
+                        curDelay += (val & 0x7F)
+                        curDelay *= 0x80
+                        val = read_byte(filePos)
+                        filePos += 1
+            curDelay += (val & 0x7F)
+            outfile.write("Delay:" + str(curDelay) + "\n")
+        elif(command < 0x80):
             #note on
-            if(trackNum != str(command & 0xF)):
-                outfile.write("Track:" + str(command & 0xF) + "\n")
-            trackNum = str(command & 0xF)
             textCommand = "NoteOn:"
-            arg1 = read_byte(filePos)
-            filePos += 1
+            arg1 = command
             arg2 = read_byte(filePos)
             filePos += 1
-            if(noteLengthArg and arg2 > 0):
-                noteLength = get_note_length(filePos,command & 0xF,arg1)
-                outfile.write(textCommand + str(arg1) + "," + str(arg2) + "," + str(noteLength) + "\n")
-            else:
-                outfile.write(textCommand + str(arg1) + "," + str(arg2) + "\n")
-        elif((command & 0xF0) == 0xA0):
+            val = read_byte(filePos)
+            filePos += 1
+            if(val > 0x7F):
+                curDelay += (val & 0x7F)
+                curDelay *= 0x80
+                val = read_byte(filePos)
+                filePos += 1
+                if(val > 0x7F):
+                    curDelay += (val & 0x7F)
+                    curDelay *= 0x80
+                    val = read_byte(filePos)
+                    filePos += 1
+                    if(val > 0x7F):
+                        curDelay += (val & 0x7F)
+                        curDelay *= 0x80
+                        val = read_byte(filePos)
+                        filePos += 1
+            curDelay += (val & 0x7F)
+            outfile.write(textCommand + str(arg1) + "," + str(arg2) + "," + str(curDelay) + "\n")
+        elif((command & 0xF0) == 0xA0):#Finish commands
             #key pressure
             if(trackNum != str(command & 0xF)):
                 outfile.write("Track:" + str(command & 0xF) + "\n")
