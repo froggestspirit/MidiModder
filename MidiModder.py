@@ -207,9 +207,9 @@ if(mode == DECODE): #decode
     header = midiFile[:4]
     if(header == b'MThd'):
         mode = DECODE
-    #elif(header == b'SSEQ'):
-    #    mode = DECODE_SSEQ
-    #    noteLengthArg = True
+    elif(header == b'SSEQ'):
+        mode = DECODE_SSEQ
+        noteLengthArg = True
     if(mode == HELP):
         sys.exit()
 
@@ -856,10 +856,11 @@ elif(mode == DECODE_SSEQ): #decode nds sseq
     fileSize = read_long(8)
     nDataOffset = read_long(0x18)
     filePos = nDataOffset
-    trackUsed[16]
-    trackPointer[16]
+    trackUsed = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+    trackPointer = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+    filePos += 1
     tracksUsed = read_short(filePos)
-    filePose += 2
+    filePos += 2
     numTracks = 0
     for i in range(16):
         if(tracksUsed & 1 == 1):
@@ -870,7 +871,7 @@ elif(mode == DECODE_SSEQ): #decode nds sseq
         tracksUsed = tracksUsed >> 1
     if(echo): print("File Size: " + str(fileSize))
     if(echo): print("Number of Tracks: " + str(numTracks))
-    trackEnd = True
+    trackEnd = False
     lastCommand = 0
     outfile = open(sysargv[outfileArg],"w")
     for i in range(numTracks - 1):
@@ -878,20 +879,24 @@ elif(mode == DECODE_SSEQ): #decode nds sseq
         trackPointer[read_byte(filePos)] = read_long(filePos + 1) & 0x00FFFFFF
         filePos += 4
     trackPointer[0] = filePos #track 0 starts after the pointers
-
-    trackNum = -1
+    trackNum = 0
+    outfile.write("StartTrack\n")
+    outfile.write("Track:" + str(trackNum) + "\n")
     while(filePos < fileSize):
         if(trackEnd):
-            outfile.write("StartTrack\n")
             trackEnd = False
             delay = 0
             totalTrackLength = 0
             trackNum += 1
-            while(trackUsed[trackNum] == 0 && trackNum < 16):
-                trackNum += 1
             if(trackNum == 16):
                 outfile.close()
                 sys.exit()
+            while(trackUsed[trackNum] == 0 and trackNum < 16):
+                trackNum += 1
+                if(trackNum == 16):
+                    outfile.close()
+                    sys.exit()
+            outfile.write("\nStartTrack\n")
             outfile.write("Track:" + str(trackNum) + "\n")
         curDelay = 0
         command = read_byte(filePos)
@@ -944,98 +949,69 @@ elif(mode == DECODE_SSEQ): #decode nds sseq
                         filePos += 1
             curDelay += (val & 0x7F)
             outfile.write(textCommand + str(arg1) + "," + str(arg2) + "," + str(curDelay) + "\n")
-        elif((command & 0xF0) == 0xA0):#Finish commands
-            #key pressure
-            if(trackNum != str(command & 0xF)):
-                outfile.write("Track:" + str(command & 0xF) + "\n")
-            trackNum = str(command & 0xF)
-            textCommand = "PolyPressure:"
-            arg1 = read_byte(filePos)
-            filePos += 1
-            arg2 = read_byte(filePos)
-            filePos += 1
-            outfile.write(textCommand + str(arg1) + "," + str(arg2) + "\n")
-        elif((command & 0xF0) == 0xB0):
-            #controller change
-            if(trackNum != str(command & 0xF)):
-                outfile.write("Track:" + str(command & 0xF) + "\n")
-            trackNum = str(command & 0xF)
-            arg1 = read_byte(filePos)
-            filePos += 1
-            arg2 = read_byte(filePos)
-            filePos += 1
-            outfile.write("Controller_" + str(arg1) + ":" + str(arg2) + "\n")
-        elif((command & 0xF0) == 0xC0):
+        elif(command == 0x81):
             #program change
-            if(trackNum != str(command & 0xF)):
-                outfile.write("Track:" + str(command & 0xF) + "\n")
-            trackNum = str(command & 0xF)
             textCommand = "Instrument:"
             arg1 = read_byte(filePos)
             filePos += 1
-            outfile.write(textCommand + str(arg1) + "\n")
-        elif((command & 0xF0) == 0xD0):
-            #channel pressure
-            if(trackNum != str(command & 0xF)):
-                outfile.write("Track:" + str(command & 0xF) + "\n")
-            trackNum = str(command & 0xF)
-            textCommand = "KeyPressure:"
-            arg1 = read_byte(filePos)
-            filePos += 1
-            outfile.write(textCommand + str(arg1) + "\n")
-        elif((command & 0xF0) == 0xE0):
-            #pitch bend
-            if(trackNum != str(command & 0xF)):
-                outfile.write("Track:" + str(command & 0xF) + "\n")
-            trackNum = str(command & 0xF)
-            textCommand = "PitchBend:"
-            arg1 = (read_byte(filePos) & 0x7F)
-            filePos += 1
-            arg2 = (read_byte(filePos) & 0x7F)
-            filePos += 1
-            outfile.write(textCommand + str((arg2 * 0x80) + arg1) + "\n")
-        elif(command == 0xF0 or command == 0xF7):
-            #sys - ex event
-            textCommand = "SysEvent:"
-            arg1 = read_byte(filePos)
-            filePos += 1
-            outfile.write(textCommand)
-            for i in range(arg1):
+            if(arg1 & 0x80):
                 arg2 = read_byte(filePos)
                 filePos += 1
-                if(i < arg1 - 1): outfile.write(str(arg2) + ",")    
-                if(i == arg1 - 1): outfile.write(str(arg2))    
-            outfile.write("\n")        
+            outfile.write(textCommand + str(arg1 & 0x7F) + "\n")
+        elif(command == 0x94):
+            #jump
+            textCommand = "Jump:"
+            arg1 = read_long(filePos) & 0x00FFFFFF
+            filePos += 3
+            outfile.write(textCommand + str(arg1) + "\n")
+            trackEnd = True
+        elif(command == 0x93):
+            #call
+            textCommand = "Call:"
+            arg1 = read_long(filePos) & 0x00FFFFFF
+            filePos += 3
+            outfile.write(textCommand + str(arg1) + "\n")
+        elif(command == 0xFD):
+            #return
+            textCommand = "Return:"
+            outfile.write(textCommand + "\n")
         elif(command == 0xFF):
-            #meta event
-            textCommand = "MetaEvent_"
+            #end
+            textCommand = "End:"
+            outfile.write(textCommand + "\n")
+            trackEnd = True
+        elif(command == 0xD4):
+            #loop start
+            textCommand = "LoopStart:"
             arg1 = read_byte(filePos)
             filePos += 1
-            if(arg1 >= 1 and arg1 <= 7):
-                textMode = True
-            else:
-                textMode = False
-            if(arg1 == 0x2F):
-                #end of track
-                outfile.write("EndTrack\n")
-                outfile.write(";Track Length: " + str(totalTrackLength) + "\n\n")
-                filePos += 9#skip next 'MTrk' and tracklength
-                lastCommand = 0
-                trackEnd = True
-                trackNum = -1
-            else:
-                outfile.write(textCommand + str(arg1) + ":")
-                if(textMode): outfile.write('"')
-                arg1 = read_byte(filePos)
-                filePos += 1
-                for i in range(arg1):
-                    arg2 = read_byte(filePos)
-                    filePos += 1
-                    if(textMode):
-                        if(i < arg1 - 1): outfile.write(str(chr(arg2)))    
-                        if(i == arg1 - 1): outfile.write(str(chr(arg2)) + '"')    
-                    else:
-                        if(i < arg1 - 1): outfile.write(str(arg2) + ",")    
-                        if(i == arg1 - 1): outfile.write(str(arg2))    
-                outfile.write("\n")        
+            outfile.write(textCommand + str(arg1) + "\n")
+        elif(command == 0xFC):
+            #loop end
+            textCommand = "LoopEnd:"
+            outfile.write(textCommand + "\n")
+        elif(command == 0xD4):
+            #modulation delay
+            textCommand = "ModDelay:"
+            arg1 = read_short(filePos)
+            filePos += 2
+            outfile.write(textCommand + str(arg1) + "\n")
+        elif(command == 0xD4):
+            #tempo
+            textCommand = "Tempo:"
+            arg1 = read_short(filePos)
+            filePos += 2
+            outfile.write(textCommand + str(arg1) + "\n")
+        elif(command == 0xD4):
+            #sweep pitch
+            textCommand = "SweepPitch:"
+            arg1 = read_short(filePos)
+            filePos += 2
+            outfile.write(textCommand + str(arg1) + "\n")
+        else:
+            #other
+            textCommand = "Undefined" + str(command) + ":"
+            arg1 = read_byte(filePos)
+            filePos += 1
+            outfile.write(textCommand + str(arg1) + "\n")
     outfile.close()
