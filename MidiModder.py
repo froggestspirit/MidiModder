@@ -871,18 +871,20 @@ elif(mode == DECODE_SSEQ): #decode nds sseq
         tracksUsed = tracksUsed >> 1
     if(echo): print("File Size: " + str(fileSize))
     if(echo): print("Number of Tracks: " + str(numTracks))
-    trackEnd = False
+    trackEnd = True
     lastCommand = 0
     outfile = open(sysargv[outfileArg],"w")
     for i in range(numTracks - 1):
         filePos += 1 #skip the 0x93 byte
-        trackPointer[read_byte(filePos)] = read_long(filePos + 1) & 0x00FFFFFF
+        trackPointer[read_byte(filePos)] = (read_long(filePos + 1) & 0x00FFFFFF) + nDataOffset
         filePos += 4
     trackPointer[0] = filePos #track 0 starts after the pointers
-    trackNum = 0
-    outfile.write("StartTrack\n")
-    outfile.write("Track:" + str(trackNum) + "\n")
+    trackNum = -1
     while(filePos < fileSize):
+        for i in range(16):
+            if(trackUsed[i] == 1):
+                if(trackPointer[i] == filePos):
+                    trackEnd = True
         if(trackEnd):
             trackEnd = False
             delay = 0
@@ -896,8 +898,10 @@ elif(mode == DECODE_SSEQ): #decode nds sseq
                 if(trackNum == 16):
                     outfile.close()
                     sys.exit()
-            outfile.write("\nStartTrack\n")
+            if(trackNum > 0): outfile.write("\n")
+            outfile.write("StartTrack\n")
             outfile.write("Track:" + str(trackNum) + "\n")
+            filePos = trackPointer[trackNum]
         curDelay = 0
         command = read_byte(filePos)
         filePos += 1
@@ -964,7 +968,7 @@ elif(mode == DECODE_SSEQ): #decode nds sseq
             arg1 = read_long(filePos) & 0x00FFFFFF
             filePos += 3
             outfile.write(textCommand + str(arg1) + "\n")
-            trackEnd = True
+            #trackEnd = True
         elif(command == 0x93):
             #call
             textCommand = "Call:"
@@ -979,7 +983,7 @@ elif(mode == DECODE_SSEQ): #decode nds sseq
             #end
             textCommand = "End:"
             outfile.write(textCommand + "\n")
-            trackEnd = True
+            #trackEnd = True
         elif(command == 0xD4):
             #loop start
             textCommand = "LoopStart:"
